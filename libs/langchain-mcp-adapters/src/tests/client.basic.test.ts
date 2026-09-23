@@ -1773,6 +1773,7 @@ describe("MultiServerMCPClient", () => {
           restart: {
             enabled: true,
             maxAttempts,
+            delayMs: 10,
           },
         },
       });
@@ -1785,6 +1786,7 @@ describe("MultiServerMCPClient", () => {
 
       // Reset counts to only measure reconnection attempts
       (StdioClientTransport as Mock).mockClear();
+      (Client.prototype.connect as Mock).mockClear();
       (Client.prototype.connect as Mock).mockImplementationOnce(() =>
         Promise.reject(new Error("reconnect fail 1"))
       );
@@ -1798,11 +1800,15 @@ describe("MultiServerMCPClient", () => {
       expect(onclose).toBeDefined();
       await onclose?.();
 
-      // Wait for reconnection attempts to complete
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
-      // Should attempt to create a new transport exactly maxAttempts times
-      expect(StdioClientTransport).toHaveBeenCalledTimes(maxAttempts);
+      // Wait for the detached reconnect loop to consume both failures before
+      // this test restores mocks for the next case.
+      await vi.waitFor(() =>
+        expect(StdioClientTransport).toHaveBeenCalledTimes(maxAttempts)
+      );
+      await vi.waitFor(() =>
+        expect(Client.prototype.connect).toHaveBeenCalledTimes(maxAttempts)
+      );
+      await client.close();
     });
   });
 

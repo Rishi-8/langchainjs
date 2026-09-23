@@ -227,30 +227,10 @@ describe("ConnectionManager", () => {
         })
       );
 
-      // the event stream is opened through a custom fetch that injects the
-      // provider token first; a configured Authorization header has to replace
-      // that token rather than be appended to it ("Bearer abc, Bearer token")
-      let sent = new Headers();
-      const fetchSpy = vi
-        .spyOn(globalThis, "fetch")
-        .mockImplementation(async (_url, init) => {
-          sent = new Headers(init?.headers);
-          return new Response();
-        });
-
-      try {
-        await sseCall[1].eventSourceInit.fetch(
-          new URL("http://localhost:8000/sse"),
-          {}
-        );
-      } finally {
-        fetchSpy.mockRestore();
-      }
-
-      expect(tokens).toHaveBeenCalled();
-      expect(sent.get("authorization")).toBe("Bearer token");
-      expect(sent.get("x-test")).toBe("1");
-      expect(sent.get("accept")).toBe("text/event-stream");
+      // SDK 2 owns authorization and stream creation. The adapter must pass
+      // both inputs through without reinstating the SDK 1 custom-fetch shim.
+      expect(sseCall[1]).not.toHaveProperty("eventSourceInit");
+      expect(tokens).not.toHaveBeenCalled();
     });
   });
 
